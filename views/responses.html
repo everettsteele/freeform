@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FREEFORM — Responses</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css"></head><body>
+<nav class="nav">
+  <a class="nav-logo" href="/dashboard">FREE<span>FORM</span></a>
+  <div class="nav-right">
+    <button class="btn btn-secondary btn-sm" onclick="window.location='/dashboard'">← Dashboard</button>
+    <button class="btn btn-secondary btn-sm" id="edit-btn">Edit Form</button>
+    <button class="btn btn-primary btn-sm" id="csv-btn">Export CSV</button>
+  </div>
+</nav>
+<div class="layout"><div class="main">
+  <div class="page-title" id="form-title">Loading...</div>
+  <div class="page-sub" id="form-sub"></div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-label">Responses</div><div class="stat-val" id="stat-count">—</div></div>
+    <div class="share-box" style="flex:1;align-self:center">
+      <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">SHARE:</span>
+      <span class="share-url" id="share-url"></span>
+      <button class="btn btn-secondary btn-sm" onclick="copyLink()">Copy</button>
+    </div>
+  </div>
+  <div id="responses-container"></div>
+</div></div>
+<script>
+const formId=window.location.pathname.split('/forms/')[1].split('/')[0];
+let formData=null;
+
+async function init(){
+  const [form,responses]=await Promise.all([
+    fetch('/api/forms/'+formId).then(r=>r.json()),
+    fetch('/api/responses/'+formId).then(r=>r.json())
+  ]);
+  if(form.error){window.location='/dashboard';return;}
+  formData=form;
+  document.title='FREEFORM — '+form.title;
+  document.getElementById('form-title').textContent=form.title;
+  document.getElementById('form-sub').textContent=form.slug+' · '+(form.is_active?'Active':'Paused');
+  document.getElementById('share-url').textContent=window.location.origin+'/f/'+form.slug;
+  document.getElementById('edit-btn').onclick=()=>window.location='/forms/'+formId+'/edit';
+  document.getElementById('csv-btn').onclick=()=>window.location='/api/responses/'+formId+'/csv';
+  document.getElementById('stat-count').textContent=responses.length;
+  renderResponses(form.fields,responses);
+}
+
+function renderResponses(fields,responses){
+  const el=document.getElementById('responses-container');
+  if(!responses.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No responses yet. Share your form to start collecting.</div></div>';
+    return;
+  }
+  const headers=['Submitted','...fields shown per response'];
+  el.innerHTML='<div class="card">'+responses.map((r,i)=>{
+    return `<div style="padding:16px 18px;${i>0?'border-top:1px solid var(--border)':''}"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div style="font-size:11px;color:var(--muted);font-family:Space Mono,monospace">${new Date(r.created_at*1000).toLocaleString()}</div><button class="btn btn-danger btn-sm" onclick="deleteResponse('${r.id}')">Delete</button></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">${fields.filter(f=>f.type!=='divider').map(f=>`<div><div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:2px">${f.label}</div><div style="font-size:13px">${Array.isArray(r.data[f.id]?.value)?r.data[f.id].value.join(', '):(r.data[f.id]?.value||'—')}</div></div>`).join('')}</div></div>`;
+  }).join('')+'</div>';
+}
+
+async function deleteResponse(id){
+  if(!confirm('Delete this response?'))return;
+  await fetch('/api/responses/'+id,{method:'DELETE'});
+  init();
+}
+
+function copyLink(){
+  navigator.clipboard.writeText(window.location.origin+'/f/'+document.getElementById('share-url').textContent.split('/f/')[1]||formData.slug);
+}
+
+init();
+</script></body></html>

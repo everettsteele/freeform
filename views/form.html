@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Form</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css"></head><body>
+<div class="form-wrap"><div class="form-card" id="form-container"><div style="color:var(--muted);text-align:center">Loading...</div></div></div>
+<script>
+const slug=window.location.pathname.split('/f/')[1];
+let formData=null;
+
+async function init(){
+  const res=await fetch('/api/forms/public/'+slug);
+  if(!res.ok){document.getElementById('form-container').innerHTML='<div class="form-success"><div class="form-success-icon">🚫</div><div class="form-success-title">Form not found</div><div class="form-success-msg">This form may have been removed or deactivated.</div></div>';return;}
+  formData=await res.json();
+  document.title=formData.title;
+  renderForm();
+}
+
+function renderForm(){
+  const f=formData;
+  document.getElementById('form-container').innerHTML=`
+    <div class="form-title">${f.title}</div>
+    ${f.description?`<div class="form-desc">${f.description}</div>`:''}
+    <div id="alert" style="margin-bottom:16px"></div>
+    <form id="the-form" onsubmit="submitForm(event)">
+      ${f.fields.map(field=>renderField(field)).join('')}
+      <button type="submit" class="form-submit" id="submit-btn">Submit</button>
+    </form>`;
+}
+
+function renderField(field){
+  if(field.type==='divider')return '<hr style="border:none;border-top:1px solid var(--border);margin:24px 0">';
+  const req=field.required?'<span class="req">*</span>':'';
+  const hint=field.hint?`<div class="form-field-hint">${field.hint}</div>`:'';
+  let input='';
+  if(field.type==='text'||field.type==='email'||field.type==='phone'||field.type==='number'){
+    input=`<input type="${field.type}" name="${field.id}" class="form-input" placeholder="${field.placeholder||''}" ${field.required?'required':''}>`;
+  } else if(field.type==='textarea'){
+    input=`<textarea name="${field.id}" class="form-input" placeholder="${field.placeholder||''}" ${field.required?'required':''}></textarea>`;
+  } else if(field.type==='date'){
+    input=`<input type="date" name="${field.id}" class="form-input" ${field.required?'required':''}>`;
+  } else if(field.type==='select'){
+    input=`<select name="${field.id}" class="form-input" ${field.required?'required':''}><option value="">Select...</option>${(field.options||[]).map(o=>`<option value="${o}">${o}</option>`).join('')}</select>`;
+  } else if(field.type==='radio'){
+    input=`<div class="radio-group">${(field.options||[]).map(o=>`<label class="radio-item"><input type="radio" name="${field.id}" value="${o}" ${field.required?'required':''}> ${o}</label>`).join('')}</div>`;
+  } else if(field.type==='checkbox'){
+    input=`<div class="checkbox-group">${(field.options||[]).map(o=>`<label class="checkbox-item"><input type="checkbox" name="${field.id}" value="${o}"> ${o}</label>`).join('')}</div>`;
+  }
+  return `<div class="form-field"><label class="form-field-label">${field.label}${req}</label>${input}${hint}</div>`;
+}
+
+async function submitForm(e){
+  e.preventDefault();
+  const btn=document.getElementById('submit-btn');
+  btn.disabled=true;btn.textContent='Submitting...';
+  const formEl=document.getElementById('the-form');
+  const data={};
+  const fd=new FormData(formEl);
+  formData.fields.forEach(f=>{
+    if(f.type==='checkbox'){
+      data[f.id]=fd.getAll(f.id);
+    } else {
+      data[f.id]=fd.get(f.id)||'';
+    }
+  });
+  const res=await fetch('/api/responses/submit/'+slug,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const d=await res.json();
+  if(d.ok){
+    if(d.redirect)window.location=d.redirect;
+    else document.getElementById('form-container').innerHTML=`<div class="form-success"><div class="form-success-icon">✓</div><div class="form-success-title">Submitted</div><div class="form-success-msg">${d.message}</div></div>`;
+  } else {
+    btn.disabled=false;btn.textContent='Submit';
+    const a=document.getElementById('alert');
+    a.className='alert alert-err';
+    a.textContent=d.errors?Object.values(d.errors).join(', '):(d.error||'Submission failed');
+  }
+}
+
+init();
+</script></body></html>

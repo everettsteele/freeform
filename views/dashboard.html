@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FREEFORM — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css"></head><body>
+<nav class="nav">
+  <a class="nav-logo" href="/dashboard">FREE<span>FORM</span></a>
+  <div class="nav-right"><span id="user-name" style="font-size:13px;color:var(--muted)"></span><button class="btn btn-ghost btn-sm" onclick="logout()">Sign out</button></div>
+</nav>
+<div class="layout">
+<div class="main">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+  <div><div class="page-title">Your Forms</div><div class="page-sub" id="form-count">Loading...</div></div>
+  <a class="btn btn-primary" href="/forms/new">+ New Form</a>
+</div>
+<div id="forms-list"></div>
+</div></div>
+<script>
+async function init(){
+  const me=await fetch('/api/auth/me').then(r=>r.json());
+  if(me.error){window.location='/login';return;}
+  document.getElementById('user-name').textContent=me.name;
+  const forms=await fetch('/api/forms').then(r=>r.json());
+  document.getElementById('form-count').textContent=forms.length===0?'No forms yet':forms.length+' form'+(forms.length===1?'':'s');
+  const list=document.getElementById('forms-list');
+  if(!forms.length){
+    list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No forms yet. Create your first one.</div><a class="btn btn-primary" href="/forms/new">+ New Form</a></div>';
+    return;
+  }
+  list.innerHTML='<div class="card"><table class="table"><thead><tr><th>Title</th><th>Responses</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>'
+    +forms.map(f=>`<tr>
+      <td><a href="/forms/${f.id}/responses" style="font-weight:500;text-decoration:none;color:var(--text)">${f.title}</a><div style="font-family:Space Mono,monospace;font-size:10px;color:var(--muted);margin-top:2px">/f/${f.slug}</div></td>
+      <td>${f.response_count}</td>
+      <td><span class="badge ${f.is_active?'badge-green':'badge-gray'}">${f.is_active?'Active':'Paused'}</span></td>
+      <td style="color:var(--muted)">${new Date(f.created_at*1000).toLocaleDateString()}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <a class="btn btn-secondary btn-sm" href="/forms/${f.id}/edit">Edit</a>
+        <a class="btn btn-secondary btn-sm" href="/forms/${f.id}/responses">Responses</a>
+        <button class="btn btn-danger btn-sm" onclick="deleteForm('${f.id}')">Delete</button>
+      </td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+}
+async function deleteForm(id){
+  if(!confirm('Delete this form and all its responses?'))return;
+  await fetch('/api/forms/'+id,{method:'DELETE'});
+  init();
+}
+async function logout(){await fetch('/api/auth/logout',{method:'POST'});window.location='/login';}
+init();
+</script></body></html>

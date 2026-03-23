@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FREEFORM — Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css"></head><body>
+<nav class="nav">
+  <a class="nav-logo" href="/dashboard">FREE<span>FORM</span></a>
+  <div class="nav-right">
+    <button class="btn btn-secondary btn-sm" onclick="window.location='/dashboard'">← Back</button>
+    <button class="btn btn-primary btn-sm" onclick="saveForm()">Save Form</button>
+  </div>
+</nav>
+<div class="builder-layout">
+  <div class="builder-fields">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Add Field</div>
+    <button class="field-type-btn" onclick="addField('text')">📝 Short Text</button>
+    <button class="field-type-btn" onclick="addField('textarea')">📄 Long Text</button>
+    <button class="field-type-btn" onclick="addField('email')">✉️ Email</button>
+    <button class="field-type-btn" onclick="addField('phone')">📱 Phone</button>
+    <button class="field-type-btn" onclick="addField('number')">🔢 Number</button>
+    <button class="field-type-btn" onclick="addField('select')">🔽 Dropdown</button>
+    <button class="field-type-btn" onclick="addField('radio')">⚪ Multiple Choice</button>
+    <button class="field-type-btn" onclick="addField('checkbox')">☑️ Checkboxes</button>
+    <button class="field-type-btn" onclick="addField('date')">📅 Date</button>
+    <button class="field-type-btn" onclick="addField('divider')">➖ Divider</button>
+  </div>
+  <div class="builder-canvas">
+    <div style="max-width:560px">
+      <div class="form-group"><label class="form-label">Form Title</label><input id="form-title" class="form-input" placeholder="Untitled Form" style="font-size:18px;font-weight:600"></div>
+      <div class="form-group"><label class="form-label">Description <span style="color:var(--muted);font-weight:400">(optional)</span></label><textarea id="form-desc" class="form-input" placeholder="What is this form for?"></textarea></div>
+      <div id="alert" style="margin-bottom:12px"></div>
+      <div id="fields-canvas" style="margin-top:8px"></div>
+      <div id="empty-canvas" style="text-align:center;padding:32px;border:2px dashed var(--border);border-radius:4px;color:var(--muted);font-size:13px">← Add fields from the left panel</div>
+    </div>
+  </div>
+  <div class="builder-preview">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Settings</div>
+    <div class="form-group"><label class="form-label">Success Message</label><input id="success-msg" class="form-input" placeholder="Thanks for your response."></div>
+    <div class="form-group"><label class="form-label">Redirect URL <span style="color:var(--muted);font-weight:400">(optional)</span></label><input id="redirect-url" class="form-input" placeholder="https://..."></div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Share Link</div>
+      <div id="share-box" style="display:none" class="share-box"><span class="share-url" id="share-url"></span><button class="btn btn-secondary btn-sm" onclick="copyShare()">Copy</button></div>
+      <div id="share-hint" style="font-size:12px;color:var(--muted)">Save the form to get a shareable link.</div>
+    </div>
+  </div>
+</div>
+<script>
+let fields=[];
+let formId=null;
+const FIELD_TYPES={text:'Short Text',textarea:'Long Text',email:'Email',phone:'Phone',number:'Number',select:'Dropdown',radio:'Multiple Choice',checkbox:'Checkboxes',date:'Date',divider:'Divider'};
+
+async function init(){
+  const id=window.location.pathname.split('/forms/')[1]?.split('/')[0];
+  if(id&&id!=='new'){
+    formId=id;
+    const f=await fetch('/api/forms/'+id).then(r=>r.json());
+    document.getElementById('form-title').value=f.title;
+    document.getElementById('form-desc').value=f.description||'';
+    document.getElementById('success-msg').value=f.settings?.success_message||'';
+    document.getElementById('redirect-url').value=f.settings?.redirect_url||'';
+    fields=f.fields||[];
+    renderFields();
+    showShare(f.slug);
+  }
+}
+
+function addField(type){
+  const id='field_'+Date.now();
+  const field={id,type,label:FIELD_TYPES[type],placeholder:'',required:false,options:type==='select'||type==='radio'||type==='checkbox'?['Option 1','Option 2']:undefined};
+  fields.push(field);
+  renderFields();
+}
+
+function removeField(id){fields=fields.filter(f=>f.id!==id);renderFields();}
+
+function renderFields(){
+  const canvas=document.getElementById('fields-canvas');
+  const empty=document.getElementById('empty-canvas');
+  empty.style.display=fields.length?'none':'block';
+  canvas.innerHTML=fields.map((f,i)=>{
+    if(f.type==='divider')return `<div class="field-card"><div class="field-card-header"><span class="field-card-drag">⠿</span><span class="field-card-label" style="color:var(--muted)">── Divider ──</span><button class="btn btn-ghost btn-sm" onclick="removeField('${f.id}')">✕</button></div></div>`;
+    return `<div class="field-card">
+      <div class="field-card-header" onclick="toggleField('${f.id}')">
+        <span class="field-card-drag">⠿</span>
+        <span class="field-card-label">${f.label||'Untitled'}${f.required?' *':''}</span>
+        <span class="field-card-type">${f.type}</span>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();removeField('${f.id}')">✕</button>
+      </div>
+      <div class="field-card-body" id="fb-${f.id}">
+        <div class="form-group"><label class="form-label">Label</label><input class="form-input" value="${f.label}" oninput="updateField('${f.id}','label',this.value)"></div>
+        ${f.type!=='date'&&f.type!=='checkbox'&&f.type!=='radio'?`<div class="form-group"><label class="form-label">Placeholder</label><input class="form-input" value="${f.placeholder||''}" oninput="updateField('${f.id}','placeholder',this.value)"></div>`:''}
+        ${f.options?`<div class="form-group"><label class="form-label">Options (one per line)</label><textarea class="form-input" oninput="updateField('${f.id}','options',this.value.split('\n'))">${f.options.join('\n')}</textarea></div>`:''}
+        <label class="required-toggle"><input type="checkbox" ${f.required?'checked':''} onchange="updateField('${f.id}','required',this.checked)"> Required</label>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleField(id){
+  const el=document.getElementById('fb-'+id);
+  if(el)el.classList.toggle('open');
+}
+
+function updateField(id,key,val){
+  const f=fields.find(f=>f.id===id);
+  if(f)f[key]=val;
+}
+
+async function saveForm(){
+  const title=document.getElementById('form-title').value.trim();
+  if(!title){alert('Please add a form title.');return;}
+  const body={title,description:document.getElementById('form-desc').value.trim(),fields,settings:{success_message:document.getElementById('success-msg').value.trim(),redirect_url:document.getElementById('redirect-url').value.trim()}};
+  const a=document.getElementById('alert');
+  if(formId){
+    const res=await fetch('/api/forms/'+formId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await res.json();
+    if(d.ok){a.className='alert alert-ok';a.textContent='Saved.';setTimeout(()=>a.textContent='',2000);}
+    else{a.className='alert alert-err';a.textContent=d.error;}
+  } else {
+    const res=await fetch('/api/forms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await res.json();
+    if(d.ok){formId=d.id;showShare(d.slug);window.history.replaceState(null,'','/forms/'+d.id+'/edit');a.className='alert alert-ok';a.textContent='Form created.';}
+    else{a.className='alert alert-err';a.textContent=d.error;}
+  }
+}
+
+function showShare(slug){
+  const url=window.location.origin+'/f/'+slug;
+  document.getElementById('share-url').textContent=url;
+  document.getElementById('share-box').style.display='flex';
+  document.getElementById('share-hint').style.display='none';
+}
+
+function copyShare(){
+  navigator.clipboard.writeText(window.location.origin+'/f/'+document.getElementById('share-url').textContent.split('/f/')[1]).then(()=>alert('Copied!'));
+}
+
+init();
+</script></body></html>
