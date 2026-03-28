@@ -6,6 +6,21 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3004;
 
+// CORS — allow cross-origin requests to the open submit endpoint
+app.use((req, res, next) => {
+  const allowed = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
+    : ['https://neverstill.llc', 'https://www.neverstill.llc'];
+  const origin = req.headers.origin;
+  if (origin && (allowed.includes(origin) || allowed.includes('*'))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
