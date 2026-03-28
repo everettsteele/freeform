@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db');
+const { notifyNewSubmission } = require('../notifications');
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -25,6 +26,9 @@ router.post('/submit-open/:slug', async (req, res) => {
   db.prepare('INSERT INTO responses (id, form_id, data_json, submitter_ip) VALUES (?, ?, ?, ?)').run(
     id, form.id, JSON.stringify(data), ip
   );
+
+  // Email notification — fire and forget
+  notifyNewSubmission(form.title, form.slug, data).catch(() => {});
 
   fireWebhooks(form.id, data).catch(() => {});
 
@@ -58,6 +62,9 @@ router.post('/submit/:slug', async (req, res) => {
   db.prepare('INSERT INTO responses (id, form_id, data_json, submitter_ip) VALUES (?, ?, ?, ?)').run(
     id, form.id, JSON.stringify(data), ip
   );
+
+  // Email notification — fire and forget
+  notifyNewSubmission(form.title, form.slug, data).catch(() => {});
 
   fireWebhooks(form.id, data).catch(() => {});
 
