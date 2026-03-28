@@ -8,7 +8,31 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Public: submit a response
+// Public: flexible open submit — accepts any body fields, stores them all.
+// Use this for external (cross-origin) forms that control their own field names.
+router.post('/submit-open/:slug', async (req, res) => {
+  const db = getDb();
+  const form = db.prepare('SELECT * FROM forms WHERE slug = ? AND is_active = 1').get(req.params.slug);
+  if (!form) return res.status(404).json({ error: 'Form not found' });
+
+  const id = uuidv4();
+  const ip = req.ip || req.connection.remoteAddress;
+  const data = {};
+  for (const [key, val] of Object.entries(req.body || {})) {
+    data[key] = { label: key, value: val, type: 'text' };
+  }
+
+  db.prepare('INSERT INTO responses (id, form_id, data_json, submitter_ip) VALUES (?, ?, ?, ?)').run(
+    id, form.id, JSON.stringify(data), ip
+  );
+
+  fireWebhooks(form.id, data).catch(() => {});
+
+  const settings = JSON.parse(form.settings_json);
+  res.json({ ok: true, message: settings.success_message || 'Thanks for your response.' });
+});
+
+// Public: submit a response (field-ID-matched, for Freeform-native forms)
 router.post('/submit/:slug', async (req, res) => {
   const db = getDb();
   const form = db.prepare('SELECT * FROM forms WHERE slug = ? AND is_active = 1').get(req.params.slug);
@@ -35,7 +59,6 @@ router.post('/submit/:slug', async (req, res) => {
     id, form.id, JSON.stringify(data), ip
   );
 
-  // Fire webhooks (stub — async, don't await)
   fireWebhooks(form.id, data).catch(() => {});
 
   const settings = JSON.parse(form.settings_json);
