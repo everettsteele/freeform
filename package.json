@@ -19,6 +19,7 @@
     "express-session": "^1.19.0",
     "multer": "^2.1.1",
     "nanoid": "^5.1.7",
+    "resend": "^3.2.0",
     "uuid": "^13.0.0"
   }
 }
