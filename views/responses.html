@@ -43,16 +43,54 @@ async function init(){
   renderResponses(form.fields,responses);
 }
 
-function renderResponses(fields,responses){
+function renderResponseFields(fields, data) {
+  // If the form has defined fields, use those for ordering
+  const definedFields = fields.filter(f => f.type !== 'divider');
+  if (definedFields.length > 0) {
+    return definedFields.map(f => {
+      const val = Array.isArray(data[f.id]?.value) ? data[f.id].value.join(', ') : (data[f.id]?.value || '—');
+      return `<div class="resp-field"><div class="resp-field-label">${f.label}</div><div class="resp-field-val">${escHtml(String(val))}</div></div>`;
+    }).join('');
+  }
+  // Fallback: render all keys from the data object (open submit forms)
+  return Object.entries(data).map(([key, obj]) => {
+    const label = obj.label || key;
+    const val = Array.isArray(obj.value) ? obj.value.join(', ') : (obj.value || '—');
+    return `<div class="resp-field"><div class="resp-field-label">${escHtml(label)}</div><div class="resp-field-val">${escHtml(String(val))}</div></div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderResponses(fields, responses){
   const el=document.getElementById('responses-container');
   if(!responses.length){
     el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No responses yet. Share your form to start collecting.</div></div>';
     return;
   }
-  const headers=['Submitted','...fields shown per response'];
-  el.innerHTML='<div class="card">'+responses.map((r,i)=>{
-    return `<div style="padding:16px 18px;${i>0?'border-top:1px solid var(--border)':''}"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div style="font-size:11px;color:var(--muted);font-family:Space Mono,monospace">${new Date(r.created_at*1000).toLocaleString()}</div><button class="btn btn-danger btn-sm" onclick="deleteResponse('${r.id}')">Delete</button></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">${fields.filter(f=>f.type!=='divider').map(f=>`<div><div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:2px">${f.label}</div><div style="font-size:13px">${Array.isArray(r.data[f.id]?.value)?r.data[f.id].value.join(', '):(r.data[f.id]?.value||'—')}</div></div>`).join('')}</div></div>`;
-  }).join('')+'</div>';
+  el.innerHTML=responses.map((r,i)=>{
+    const expanded = `<div class="resp-fields" id="resp-body-${r.id}" style="display:none;padding:14px 18px 18px;border-top:1px solid var(--border);background:#fafafa">${renderResponseFields(fields, r.data)}</div>`;
+    return `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">`+
+      `<div class="resp-header" onclick="toggleResp('${r.id}')" style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">`+
+        `<span style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace">${new Date(r.created_at*1000).toLocaleString()}</span>`+
+        `<div style="display:flex;align-items:center;gap:10px">`+
+          `<span id="resp-arrow-${r.id}" style="font-size:11px;color:var(--muted)">▶ view</span>`+
+          `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteResponse('${r.id}')">Delete</button>`+
+        `</div>`+
+      `</div>`+
+      expanded+
+    `</div>`;
+  }).join('');
+}
+
+function toggleResp(id) {
+  const body = document.getElementById('resp-body-'+id);
+  const arrow = document.getElementById('resp-arrow-'+id);
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  arrow.textContent = open ? '▼ hide' : '▶ view';
 }
 
 async function deleteResponse(id){
@@ -62,8 +100,16 @@ async function deleteResponse(id){
 }
 
 function copyLink(){
-  navigator.clipboard.writeText(window.location.origin+'/f/'+document.getElementById('share-url').textContent.split('/f/')[1]||formData.slug);
+  navigator.clipboard.writeText(window.location.origin+'/f/'+(formData?formData.slug:''));
 }
 
 init();
-</script></body></html>
+</script>
+<style>
+.resp-field { margin-bottom: 12px; }
+.resp-field-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; font-family: 'Space Mono', monospace; }
+.resp-field-val { font-size: 13px; color: #111; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.resp-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 20px; }
+.resp-header:hover { background: #f5f5f5; }
+</style>
+</body></html>
