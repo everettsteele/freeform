@@ -31,7 +31,13 @@ function renderField(field){
   const req=field.required?'<span class="req">*</span>':'';
   const hint=field.hint?`<div class="form-field-hint">${field.hint}</div>`:'';
   let input='';
-  if(field.type==='text'||field.type==='email'||field.type==='phone'||field.type==='number'){
+  if(field.type==='name'){
+    if(field.mode==='split'){
+      input=`<div class="name-split"><input type="text" name="${field.id}__first" class="form-input" placeholder="First" ${field.required?'required':''}><input type="text" name="${field.id}__last" class="form-input" placeholder="Last" ${field.required?'required':''}></div>`;
+    } else {
+      input=`<input type="text" name="${field.id}" class="form-input" placeholder="${field.placeholder||'Full name'}" ${field.required?'required':''}>`;
+    }
+  } else if(field.type==='text'||field.type==='email'||field.type==='phone'||field.type==='number'){
     input=`<input type="${field.type}" name="${field.id}" class="form-input" placeholder="${field.placeholder||''}" ${field.required?'required':''}>`;
   } else if(field.type==='textarea'){
     input=`<textarea name="${field.id}" class="form-input" placeholder="${field.placeholder||''}" ${field.required?'required':''}></textarea>`;
@@ -57,6 +63,8 @@ async function submitForm(e){
   formData.fields.forEach(f=>{
     if(f.type==='checkbox'){
       data[f.id]=fd.getAll(f.id);
+    } else if(f.type==='name'&&f.mode==='split'){
+      data[f.id]={first:(fd.get(f.id+'__first')||'').trim(),last:(fd.get(f.id+'__last')||'').trim()};
     } else {
       data[f.id]=fd.get(f.id)||'';
     }

@@ -11,6 +11,7 @@
 <div class="builder-layout">
   <div class="builder-fields">
     <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Add Field</div>
+    <button class="field-type-btn" onclick="addField('name')">👤 Name</button>
     <button class="field-type-btn" onclick="addField('text')">📝 Short Text</button>
     <button class="field-type-btn" onclick="addField('textarea')">📄 Long Text</button>
     <button class="field-type-btn" onclick="addField('email')">✉️ Email</button>
@@ -45,7 +46,7 @@
 <script>
 let fields=[];
 let formId=null;
-const FIELD_TYPES={text:'Short Text',textarea:'Long Text',email:'Email',phone:'Phone',number:'Number',select:'Dropdown',radio:'Multiple Choice',checkbox:'Checkboxes',date:'Date',divider:'Divider'};
+const FIELD_TYPES={name:'Name',text:'Short Text',textarea:'Long Text',email:'Email',phone:'Phone',number:'Number',select:'Dropdown',radio:'Multiple Choice',checkbox:'Checkboxes',date:'Date',divider:'Divider'};
 
 async function init(){
   const id=window.location.pathname.split('/forms/')[1]?.split('/')[0];
@@ -65,28 +66,41 @@ async function init(){
 function addField(type){
   const id='field_'+Date.now();
   const field={id,type,label:FIELD_TYPES[type],placeholder:'',required:false,options:type==='select'||type==='radio'||type==='checkbox'?['Option 1','Option 2']:undefined};
+  if(type==='name')field.mode='full';
   fields.push(field);
   renderFields();
 }
 
 function removeField(id){fields=fields.filter(f=>f.id!==id);renderFields();}
 
+function moveField(id,dir){
+  const i=fields.findIndex(f=>f.id===id);
+  const j=i+dir;
+  if(i<0||j<0||j>=fields.length)return;
+  [fields[i],fields[j]]=[fields[j],fields[i]];
+  renderFields();
+}
+
 function renderFields(){
   const canvas=document.getElementById('fields-canvas');
   const empty=document.getElementById('empty-canvas');
   empty.style.display=fields.length?'none':'block';
   canvas.innerHTML=fields.map((f,i)=>{
-    if(f.type==='divider')return `<div class="field-card"><div class="field-card-header"><span class="field-card-drag">⠿</span><span class="field-card-label" style="color:var(--muted)">── Divider ──</span><button class="btn btn-ghost btn-sm" onclick="removeField('${f.id}')">✕</button></div></div>`;
+    const reorder=`<button class="btn btn-ghost btn-sm" title="Move up" ${i===0?'disabled':''} onclick="event.stopPropagation();moveField('${f.id}',-1)">↑</button><button class="btn btn-ghost btn-sm" title="Move down" ${i===fields.length-1?'disabled':''} onclick="event.stopPropagation();moveField('${f.id}',1)">↓</button>`;
+    if(f.type==='divider')return `<div class="field-card"><div class="field-card-header"><span class="field-card-label" style="color:var(--muted)">── Divider ──</span>${reorder}<button class="btn btn-ghost btn-sm" onclick="removeField('${f.id}')">✕</button></div></div>`;
+    const showPlaceholder=f.type!=='date'&&f.type!=='checkbox'&&f.type!=='radio'&&f.type!=='name';
+    const nameEditor=f.type==='name'?`<div class="form-group"><label class="form-label">Mode</label><select class="form-input" onchange="updateField('${f.id}','mode',this.value)"><option value="full" ${f.mode==='full'?'selected':''}>Full name (single input)</option><option value="split" ${f.mode==='split'?'selected':''}>First + Last (two inputs)</option></select></div>`:'';
     return `<div class="field-card">
       <div class="field-card-header" onclick="toggleField('${f.id}')">
-        <span class="field-card-drag">⠿</span>
         <span class="field-card-label">${f.label||'Untitled'}${f.required?' *':''}</span>
         <span class="field-card-type">${f.type}</span>
+        ${reorder}
         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();removeField('${f.id}')">✕</button>
       </div>
       <div class="field-card-body" id="fb-${f.id}">
         <div class="form-group"><label class="form-label">Label</label><input class="form-input" value="${f.label}" oninput="updateField('${f.id}','label',this.value)"></div>
-        ${f.type!=='date'&&f.type!=='checkbox'&&f.type!=='radio'?`<div class="form-group"><label class="form-label">Placeholder</label><input class="form-input" value="${f.placeholder||''}" oninput="updateField('${f.id}','placeholder',this.value)"></div>`:''}
+        ${nameEditor}
+        ${showPlaceholder?`<div class="form-group"><label class="form-label">Placeholder</label><input class="form-input" value="${f.placeholder||''}" oninput="updateField('${f.id}','placeholder',this.value)"></div>`:''}
         ${f.options?`<div class="form-group"><label class="form-label">Options (one per line)</label><textarea class="form-input" oninput="updateField('${f.id}','options',this.value.split('\n'))">${f.options.join('\n')}</textarea></div>`:''}
         <label class="required-toggle"><input type="checkbox" ${f.required?'checked':''} onchange="updateField('${f.id}','required',this.checked)"> Required</label>
       </div>

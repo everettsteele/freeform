@@ -48,7 +48,21 @@ router.post('/submit/:slug', async (req, res) => {
 
   for (const field of fields) {
     const val = req.body[field.id];
-    if (field.required && (!val || (Array.isArray(val) && !val.length))) {
+    if (field.type === 'name' && field.mode === 'split') {
+      const first = (val && typeof val === 'object' ? val.first : '') || '';
+      const last = (val && typeof val === 'object' ? val.last : '') || '';
+      if (field.required && (!first.trim() || !last.trim())) {
+        errors[field.id] = `${field.label} is required`;
+      } else {
+        data[field.id] = { label: field.label, value: { first, last }, type: 'name', mode: 'split' };
+      }
+    } else if (field.type === 'name') {
+      if (field.required && (!val || !String(val).trim())) {
+        errors[field.id] = `${field.label} is required`;
+      } else {
+        data[field.id] = { label: field.label, value: val || null, type: 'name', mode: 'full' };
+      }
+    } else if (field.required && (!val || (Array.isArray(val) && !val.length))) {
       errors[field.id] = `${field.label} is required`;
     } else {
       data[field.id] = { label: field.label, value: val || null, type: field.type };
@@ -103,16 +117,28 @@ router.get('/:formId/csv', requireAuth, (req, res) => {
   const fields = JSON.parse(form.fields_json);
   const responses = db.prepare('SELECT * FROM responses WHERE form_id = ? ORDER BY created_at ASC').all(req.params.formId);
 
-  const headers = ['Submitted At', ...fields.map(f => f.label)];
+  const headers = ['Submitted At'];
+  for (const f of fields) {
+    if (f.type === 'name' && f.mode === 'split') {
+      headers.push(`${f.label} - First`, `${f.label} - Last`);
+    } else {
+      headers.push(f.label);
+    }
+  }
   const rows = responses.map(r => {
     const data = JSON.parse(r.data_json);
-    return [
-      new Date(r.created_at * 1000).toISOString(),
-      ...fields.map(f => {
-        const v = data[f.id]?.value;
-        return Array.isArray(v) ? v.join(', ') : (v || '');
-      })
-    ];
+    const row = [new Date(r.created_at * 1000).toISOString()];
+    for (const f of fields) {
+      const v = data[f.id]?.value;
+      if (f.type === 'name' && f.mode === 'split') {
+        row.push((v && v.first) || '', (v && v.last) || '');
+      } else if (Array.isArray(v)) {
+        row.push(v.join(', '));
+      } else {
+        row.push(v || '');
+      }
+    }
+    return row;
   });
 
   const csv = [headers, ...rows].map(row =>

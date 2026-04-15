@@ -110,6 +110,8 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .form-success-icon { font-size: 36px; margin-bottom: 12px; }
 .form-success-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
 .form-success-msg { font-size: 14px; color: var(--muted); }
+.name-split { display: flex; gap: 10px; }
+.name-split .form-input { flex: 1; }
 .checkbox-group, .radio-group { display: flex; flex-direction: column; gap: 8px; }
 .checkbox-item, .radio-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 input[type=checkbox], input[type=radio] { width: 15px; height: 15px; accent-color: var(--text); cursor: pointer; }
