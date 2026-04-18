@@ -47,6 +47,15 @@ app.use('/api/responses', require('./routes/responses'));
 app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/admin', require('./routes/admin'));
 
+// Meridian Platform Contract v1.0.0 endpoints (additive). Registered
+// after routes so /api/meridian/* uses the app-level express.json
+// middleware. No-op if MERIDIAN_AGENT_SECRET isn't set.
+if (process.env.MERIDIAN_AGENT_SECRET) {
+  require('./meridian/contract-endpoints').register(app, process.env.MERIDIAN_AGENT_SECRET);
+} else {
+  console.log('[meridian/contract] MERIDIAN_AGENT_SECRET not set — endpoints not registered');
+}
+
 app.get('/', (req, res) => res.redirect(req.session.userId ? '/dashboard' : '/login'));
 app.get('/login', (req, res) => serve(res, 'login.html'));
 app.get('/register', (req, res) => serve(res, 'register.html'));

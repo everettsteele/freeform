@@ -1,58 +1,44 @@
-// Admin API — lets other Meridian services (Emmett, Gladys, etc.)
-// programmatically provision forms without operating a session. Gated
-// behind FREEFORM_ADMIN_SECRET sent as the `x-meridian-admin-secret`
-// header; compared via timingSafeEqual to avoid byte-by-byte leaks.
+// Admin API for Meridian services (Emmett, Gladys, Beacon, etc.).
 //
-// All write operations are scoped to the "system" admin user (resolved
-// by ADMIN_EMAIL env var, same one the partner-form seed uses). That
-// keeps admin-provisioned forms visible in the dashboard UI without
-// needing a per-service user.
+// Gated by the Meridian Platform Contract HMAC — MERIDIAN_AGENT_SECRET,
+// x-meridian-{timestamp,signature} headers, verified via
+// src/meridian/hmac.js. Same auth surface as /api/meridian/*, so there's
+// one signer library for every Freeform consumer.
 //
-// Idempotent upsert on slug: calling POST /api/admin/form twice with
-// the same slug returns the same form row and overwrites title/fields
-// in place. Callers should treat slug as the stable identity.
+// Scope:
+//   POST /api/admin/form                       — idempotent upsert by slug
+//   GET  /api/admin/form/:slug                 — read one
+//   GET  /api/admin/form/:slug/responses       — recent submissions
+//
+// Writes scoped to the "system" admin user (ADMIN_EMAIL env var, same
+// one the partner-form seed uses) so admin-provisioned forms appear in
+// the UI.
 
 'use strict';
 
 const express = require('express');
-const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
+const { requireHmac } = require('../meridian/contract-endpoints');
 const { getDb } = require('../db');
 
 const router = express.Router();
 
 function adminAuth(req, res, next) {
-  const expected = process.env.FREEFORM_ADMIN_SECRET;
-  if (!expected) {
-    return res.status(503).json({ error: 'admin API not configured (FREEFORM_ADMIN_SECRET unset)' });
+  const secret = process.env.MERIDIAN_AGENT_SECRET;
+  if (!secret) {
+    return res.status(503).json({ error: 'admin API not configured (MERIDIAN_AGENT_SECRET unset)' });
   }
-  const given = req.header('x-meridian-admin-secret') || '';
-  // Lengths must match before timingSafeEqual — the fn throws on length mismatch.
-  if (given.length !== expected.length) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
-  try {
-    if (!crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected))) {
-      return res.status(401).json({ error: 'unauthorized' });
-    }
-  } catch {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
-  next();
+  return requireHmac(secret)(req, res, next);
 }
 
-// Resolve the system/admin user id for admin-provisioned rows. Mirrors
-// the seedPartnerForm() convention — looks up by ADMIN_EMAIL; never
-// creates one here (the seed path owns user creation).
 function getSystemUserId(db) {
   const email = process.env.ADMIN_EMAIL || 'everett@neverstill.llc';
   const row = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   return row ? row.id : null;
 }
 
-// ── POST /api/admin/form ─────────────────────────────────────────────
-// Upsert a form by slug. Body: {slug, title, description?, fields?, settings?}.
-// Returns {ok, id, slug, created} where created=true if a new row was inserted.
+// POST /api/admin/form
+// Body: { slug, title, description?, fields?, settings? }
 router.post('/form', adminAuth, (req, res) => {
   const { slug, title, description, fields, settings } = req.body || {};
   if (!slug || typeof slug !== 'string' || !/^[a-z0-9-]+$/i.test(slug)) {
@@ -90,8 +76,6 @@ router.post('/form', adminAuth, (req, res) => {
   res.json({ ok: true, id, slug, created: true });
 });
 
-// ── GET /api/admin/form/:slug ─────────────────────────────────────────
-// Read a form by slug (admin view — returns everything including id).
 router.get('/form/:slug', adminAuth, (req, res) => {
   const db = getDb();
   const row = db.prepare('SELECT * FROM forms WHERE slug = ?').get(req.params.slug);
@@ -103,8 +87,6 @@ router.get('/form/:slug', adminAuth, (req, res) => {
   });
 });
 
-// ── GET /api/admin/form/:slug/responses ───────────────────────────────
-// Read recent responses for a form. Limit via ?limit=N (default 100, max 500).
 router.get('/form/:slug/responses', adminAuth, (req, res) => {
   const db = getDb();
   const form = db.prepare('SELECT id FROM forms WHERE slug = ?').get(req.params.slug);
