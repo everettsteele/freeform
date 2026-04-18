@@ -45,6 +45,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/forms', require('./routes/forms'));
 app.use('/api/responses', require('./routes/responses'));
 app.use('/api/webhooks', require('./routes/webhooks'));
+app.use('/api/admin', require('./routes/admin'));
 
 app.get('/', (req, res) => res.redirect(req.session.userId ? '/dashboard' : '/login'));
 app.get('/login', (req, res) => serve(res, 'login.html'));
